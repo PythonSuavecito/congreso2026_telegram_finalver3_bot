@@ -3,15 +3,20 @@ import csv
 import logging
 import threading
 import sqlite3
+import requests
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, ConversationHandler, ContextTypes, CallbackQueryHandler
 from telegram.ext import filters
 from flask import Flask
+import time
 
 # ================= CONFIGURACIÓN =================
 GRUPO, GUIA, BONO, MONTO, ASISTENTES = range(5)
 CORREGIR_BONO, NUEVO_BONO = range(5, 7)
+
+# Silenciar logs de Flask
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -189,6 +194,33 @@ def home():
         </body>
     </html>
     """
+
+@app.route('/health')
+def health():
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+# ================= ACTIVIDAD PERIÓDICA =================
+def mantener_activo():
+    """Función para mantener el bot activo enviando pings periódicos"""
+    def ping_web():
+        while True:
+            try:
+                # Obtener la URL dinámica de Replit
+                repl_url = os.environ.get('REPLIT_URL', '')
+                if repl_url:
+                    requests.get(f'{repl_url}/health', timeout=10)
+                    logger.info("🔄 Ping enviado para mantener activo")
+                else:
+                    # Si no hay URL, hacer ping a la ruta local
+                    requests.get('http://localhost:8080/health', timeout=10)
+            except Exception as e:
+                logger.warning(f"Ping falló: {e}")
+            time.sleep(300)  # Cada 5 minutos
+    
+    ping_thread = threading.Thread(target=ping_web)
+    ping_thread.daemon = True
+    ping_thread.start()
+    return ping_thread
 
 # ================= FUNCIONES PRINCIPALES DEL BOT =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -438,6 +470,15 @@ async def ver_estadisticas(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error obteniendo estadísticas: {e}")
         await update.message.reply_text('❌ Error al obtener estadísticas')
 
+async def limpiar_base(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando para limpiar la base de datos"""
+    try:
+        registros_eliminados = db.limpiar_registros()
+        await update.message.reply_text(f'🗑️ Base de datos limpiada. {registros_eliminados} registros eliminados.')
+    except Exception as e:
+        logger.error(f"Error limpiando BD: {e}")
+        await update.message.reply_text('❌ Error al limpiar base de datos')
+
 async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 **COMANDOS DISPONIBLES:**\n\n"
@@ -456,7 +497,7 @@ def iniciar_bot():
     token = os.environ.get('BOT_TOKEN')
     
     if not token:
-        print("❌ ERROR: BOT_TOKEN no encontrado")
+        logger.error("❌ BOT_TOKEN no encontrado")
         print("💡 Configura BOT_TOKEN en Secrets (🔒)")
         return
     
@@ -491,6 +532,7 @@ def iniciar_bot():
         application.add_handler(CommandHandler("corregir", corregir_bono))
         application.add_handler(CommandHandler("reporte", generar_reporte))
         application.add_handler(CommandHandler("estadisticas", ver_estadisticas))
+        application.add_handler(CommandHandler("limpiar", limpiar_base))
         application.add_handler(CommandHandler("ayuda", ayuda))
         
         # Handlers para botones inline
@@ -505,12 +547,15 @@ def iniciar_bot():
     except Exception as e:
         print(f"❌ Error: {e}")
 
-# ================= INICIAR TODO =================
 def iniciar_servidor_web():
-    app.run(host='0.0.0.0', port=8080)
+    """Inicia el servidor web sin modo debug"""
+    app.run(host='0.0.0.0', port=8080, debug=False)
 
 if __name__ == '__main__':
-    print("🚀 Iniciando Bot del Congreso 2026 con Corrección de Bonos...")
+    print("🚀 Iniciando Bot 24/7 del Congreso 2026...")
+    
+    # Iniciar sistema de mantenimiento activo
+    mantener_activo()
     
     # Iniciar bot en hilo separado
     bot_thread = threading.Thread(target=iniciar_bot)
