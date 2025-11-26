@@ -1,29 +1,48 @@
-# Entornos virtuales
-venv/
-env/
-.venv/
+# .gitignore
 
-# Archivos de entorno
+# Archivos de base de datos SQLite
+*.db
+*.sqlite3
+*.db-journal
+
+# Archivos de entorno y configuración
 .env
-.env.local
+config.py
+secrets.py
 
 # Archivos de Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-
-# Base de datos SQLite
-*.db
-*.sqlite3
-
-# Archivos de sistema
-.DS_Store
-Thumbs.db
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Archivos temporales
+*.csv
+*.log
 *.tmp
 *.temp
 
-# Logs
-*.log
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Entornos virtuales
+venv/
+ENV/
+env/
